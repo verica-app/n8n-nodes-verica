@@ -19,6 +19,8 @@ const base: TraceFields = {
   sessionId: 'sess-1',
   inputTokens: 100,
   outputTokens: 20,
+  reasoningTokens: 8,
+  cachedTokens: 40,
   latencyMs: 1200,
   tags: ['checkout'],
   workflowName: 'My flow',
@@ -49,6 +51,8 @@ describe('buildTracePayload', () => {
     expect(attrs['gen_ai.conversation.id']).toEqual({ stringValue: 'sess-1' });
     expect(attrs['gen_ai.usage.input_tokens']).toEqual({ intValue: '100' });
     expect(attrs['gen_ai.usage.output_tokens']).toEqual({ intValue: '20' });
+    expect(attrs['gen_ai.usage.reasoning_tokens']).toEqual({ intValue: '8' });
+    expect(attrs['gen_ai.usage.cache_read.input_tokens']).toEqual({ intValue: '40' });
 
     const input = JSON.parse((attrs['gen_ai.input.messages'] as any).stringValue);
     expect(input).toEqual([{ role: 'user', content: 'What is the capital of France?' }]);
@@ -72,6 +76,8 @@ describe('buildTracePayload', () => {
       sessionId: '',
       inputTokens: null,
       outputTokens: null,
+      reasoningTokens: null,
+      cachedTokens: null,
       latencyMs: null,
       toolCalls: [],
     });
@@ -80,6 +86,8 @@ describe('buildTracePayload', () => {
     expect(attrs['gen_ai.provider.name']).toBeUndefined();
     expect(attrs['gen_ai.conversation.id']).toBeUndefined();
     expect(attrs['gen_ai.usage.input_tokens']).toBeUndefined();
+    expect(attrs['gen_ai.usage.reasoning_tokens']).toBeUndefined();
+    expect(attrs['gen_ai.usage.cache_read.input_tokens']).toBeUndefined();
     const span = (body as any).resourceSpans[0].scopeSpans[0].spans[0];
     expect(span.endTimeUnixNano).toBeUndefined();
     const output = JSON.parse((attrs['gen_ai.output.messages'] as any).stringValue);

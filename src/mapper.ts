@@ -19,6 +19,8 @@ export interface TraceFields {
   sessionId: string;
   inputTokens: number | null;
   outputTokens: number | null;
+  reasoningTokens: number | null;
+  cachedTokens: number | null;
   latencyMs: number | null;
   tags: string[];
   workflowName: string;
@@ -145,6 +147,10 @@ export function buildTracePayload(f: TraceFields): { traceId: string; body: unkn
   if (f.sessionId.length > 0) attributes.push(s('gen_ai.conversation.id', f.sessionId));
   if (f.inputTokens != null) attributes.push(i('gen_ai.usage.input_tokens', f.inputTokens));
   if (f.outputTokens != null) attributes.push(i('gen_ai.usage.output_tokens', f.outputTokens));
+  if (f.reasoningTokens != null)
+    attributes.push(i('gen_ai.usage.reasoning_tokens', f.reasoningTokens));
+  if (f.cachedTokens != null)
+    attributes.push(i('gen_ai.usage.cache_read.input_tokens', f.cachedTokens));
 
   const span: Record<string, unknown> = {
     traceId,

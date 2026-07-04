@@ -111,6 +111,24 @@ export class VericaTrace implements INodeType {
             description:
               'Auto-reads OpenAI usage (output_tokens/completion_tokens) from the response when present',
           },
+          {
+            displayName: 'Reasoning Tokens',
+            name: 'reasoningTokens',
+            type: 'string',
+            default:
+              '={{ (($json.usage || {}).output_tokens_details || {}).reasoning_tokens ?? (($json.usage || {}).completion_tokens_details || {}).reasoning_tokens ?? "" }}',
+            description:
+              'A breakdown of output tokens. Auto-reads OpenAI usage (output_tokens_details/completion_tokens_details.reasoning_tokens) from the response when present.',
+          },
+          {
+            displayName: 'Cached Tokens',
+            name: 'cachedTokens',
+            type: 'string',
+            default:
+              '={{ (($json.usage || {}).input_tokens_details || {}).cached_tokens ?? (($json.usage || {}).prompt_tokens_details || {}).cached_tokens ?? "" }}',
+            description:
+              'A breakdown of input tokens. Auto-reads OpenAI usage (input_tokens_details/prompt_tokens_details.cached_tokens) from the response when present.',
+          },
           { displayName: 'Latency (Ms)', name: 'latencyMs', type: 'string', default: '' },
           {
             displayName: 'Tags',
@@ -163,6 +181,8 @@ export class VericaTrace implements INodeType {
           sessionId: String(options.sessionId ?? ''),
           inputTokens: numOrNull(options.inputTokens),
           outputTokens: numOrNull(options.outputTokens),
+          reasoningTokens: numOrNull(options.reasoningTokens),
+          cachedTokens: numOrNull(options.cachedTokens),
           latencyMs: numOrNull(options.latencyMs),
           tags: String(options.tags ?? '')
             .split(',')

@@ -96,6 +96,37 @@ describe('VericaTrace.execute', () => {
     expect(output[0].tool_calls).toEqual([{ function: { name: 'search', arguments: '{"q":1}' } }]);
   });
 
+  it('emits reasoning and cached token attrs when the options are set', async () => {
+    const { ctx, httpRequestWithAuthentication } = makeContext({
+      ...params,
+      options: { ...(params.options as Params), reasoningTokens: 5, cachedTokens: 3 },
+    });
+    await new VericaTrace().execute.call(ctx as never);
+
+    const [, req] = httpRequestWithAuthentication.mock.calls[0]!;
+    const span = req.body.resourceSpans[0].scopeSpans[0].spans[0];
+    const attrs = Object.fromEntries(
+      span.attributes.map((a: { key: string; value: unknown }) => [a.key, a.value]),
+    );
+    expect(attrs['gen_ai.usage.reasoning_tokens']).toEqual({ intValue: '5' });
+    expect(attrs['gen_ai.usage.cache_read.input_tokens']).toEqual({ intValue: '3' });
+  });
+
+  it('preserves a cached-tokens value of 0 (a valid breakdown, not "missing")', async () => {
+    const { ctx, httpRequestWithAuthentication } = makeContext({
+      ...params,
+      options: { ...(params.options as Params), cachedTokens: 0 },
+    });
+    await new VericaTrace().execute.call(ctx as never);
+
+    const [, req] = httpRequestWithAuthentication.mock.calls[0]!;
+    const span = req.body.resourceSpans[0].scopeSpans[0].spans[0];
+    const attrs = Object.fromEntries(
+      span.attributes.map((a: { key: string; value: unknown }) => [a.key, a.value]),
+    );
+    expect(attrs['gen_ai.usage.cache_read.input_tokens']).toEqual({ intValue: '0' });
+  });
+
   it('fail-open: an export error never throws, it annotates the item', async () => {
     const { ctx } = makeContext(params, { reject: true });
     const result = await new VericaTrace().execute.call(ctx as never);

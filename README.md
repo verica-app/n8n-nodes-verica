@@ -25,7 +25,10 @@ n8n community node that sends your AI Agent / LLM executions to
 With **"Message a model"** (OpenAI Responses API), tool calls and token usage
 are picked up from the response automatically: the **Tool Calls** default reads
 the raw `output` array (non-tool entries are ignored), and adding the **Input
-Tokens** / **Output Tokens** options captures the response's `usage`.
+Tokens** / **Output Tokens** options captures the response's `usage`, including
+the **Reasoning Tokens** (a breakdown of output tokens) and **Cached Tokens** (a
+breakdown of input tokens, priced at the cache rate) when the response reports
+them.
 
 The node is **fail-open**: an export error never breaks your workflow; the item
 passes through with a `vericaError` annotation instead.

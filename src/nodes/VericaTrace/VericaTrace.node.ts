@@ -62,9 +62,9 @@ export class VericaTrace implements INodeType {
         displayName: 'Tool Calls',
         name: 'toolCalls',
         type: 'json',
-        default: '={{ $json.intermediateSteps || [] }}',
+        default: '={{ $json.intermediateSteps || $json.output || [] }}',
         description:
-          'AI Agent intermediate steps (enable "Return intermediate steps" on the agent)',
+          'AI Agent intermediate steps (enable "Return intermediate steps" on the agent), else the raw "Message a model" output array. Non-tool entries are ignored.',
       },
       {
         displayName: 'Options',
@@ -93,8 +93,24 @@ export class VericaTrace implements INodeType {
             description:
               "Defaults to $json.sessionId; for a chat workflow point it at your trigger, e.g. {{ $('When chat message received').item.json.sessionId }}",
           },
-          { displayName: 'Input Tokens', name: 'inputTokens', type: 'string', default: '' },
-          { displayName: 'Output Tokens', name: 'outputTokens', type: 'string', default: '' },
+          {
+            displayName: 'Input Tokens',
+            name: 'inputTokens',
+            type: 'string',
+            default:
+              '={{ ($json.usage || {}).input_tokens ?? ($json.usage || {}).prompt_tokens ?? "" }}',
+            description:
+              'Auto-reads OpenAI usage (input_tokens/prompt_tokens) from the response when present',
+          },
+          {
+            displayName: 'Output Tokens',
+            name: 'outputTokens',
+            type: 'string',
+            default:
+              '={{ ($json.usage || {}).output_tokens ?? ($json.usage || {}).completion_tokens ?? "" }}',
+            description:
+              'Auto-reads OpenAI usage (output_tokens/completion_tokens) from the response when present',
+          },
           { displayName: 'Latency (Ms)', name: 'latencyMs', type: 'string', default: '' },
           {
             displayName: 'Tags',

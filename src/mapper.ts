@@ -64,13 +64,39 @@ export function inferProvider(model: string): string {
   return 'openai';
 }
 
-/** LangChain intermediateSteps ({action:{tool,toolInput}}) or flat {tool,toolInput}. */
+/**
+ * Normalize an array of tool-call entries into {tool,toolInput} pairs. Accepts,
+ * per entry, any of:
+ *  - LangChain intermediateSteps: {action:{tool,toolInput}} or flat {tool,toolInput}
+ *  - OpenAI Responses API output item: {type:'function_call', name, arguments}
+ *    (arguments is a JSON string; passed through as-is)
+ *  - Chat-completions tool_calls: {function:{name, arguments}}
+ * Entries matching none of these (e.g. {type:'message',...} items mixed into a
+ * Responses output array) are silently ignored.
+ */
 export function normalizeIntermediateSteps(raw: unknown): ToolCallInput[] {
   if (!Array.isArray(raw)) return [];
   const out: ToolCallInput[] = [];
   for (const entry of raw) {
     if (entry == null || typeof entry !== 'object') continue;
     const rec = entry as Record<string, unknown>;
+
+    // OpenAI Responses API output item.
+    if (rec.type === 'function_call' && typeof rec.name === 'string' && rec.name.length > 0) {
+      out.push({ tool: rec.name, toolInput: rec.arguments });
+      continue;
+    }
+
+    // Chat-completions tool_calls entry.
+    if (rec.function != null && typeof rec.function === 'object') {
+      const fn = rec.function as Record<string, unknown>;
+      if (typeof fn.name === 'string' && fn.name.length > 0) {
+        out.push({ tool: fn.name, toolInput: fn.arguments });
+        continue;
+      }
+    }
+
+    // LangChain: {action:{tool,toolInput}} or flat {tool,toolInput}.
     const action =
       rec.action != null && typeof rec.action === 'object'
         ? (rec.action as Record<string, unknown>)

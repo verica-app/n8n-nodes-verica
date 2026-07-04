@@ -22,6 +22,11 @@ n8n community node that sends your AI Agent / LLM executions to
 3. Enable **Return intermediate steps** on the AI Agent so tool calls land in
    the trace (Verica's `tool_check` grader can then assert on them).
 
+With **"Message a model"** (OpenAI Responses API), tool calls and token usage
+are picked up from the response automatically: the **Tool Calls** default reads
+the raw `output` array (non-tool entries are ignored), and adding the **Input
+Tokens** / **Output Tokens** options captures the response's `usage`.
+
 The node is **fail-open**: an export error never breaks your workflow; the item
 passes through with a `vericaError` annotation instead.
 

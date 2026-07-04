@@ -116,6 +116,25 @@ describe('normalizeIntermediateSteps', () => {
     ]);
     expect(normalizeIntermediateSteps('nope')).toEqual([]);
   });
+
+  it('accepts a mixed OpenAI Responses output array, ignoring non-tool items', () => {
+    expect(
+      normalizeIntermediateSteps([
+        {
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'output_text', text: 'Hola', annotations: [] }],
+        },
+        { type: 'function_call', name: 'search', arguments: '{"q":1}', call_id: 'call_1' },
+      ]),
+    ).toEqual([{ tool: 'search', toolInput: '{"q":1}' }]);
+  });
+
+  it('accepts chat-completions tool_calls ({function:{name,arguments}})', () => {
+    expect(normalizeIntermediateSteps([{ function: { name: 'f', arguments: '{}' } }])).toEqual([
+      { tool: 'f', toolInput: '{}' },
+    ]);
+  });
 });
 
 describe('coerceText', () => {

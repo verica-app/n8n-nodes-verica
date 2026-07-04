@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-verica",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "n8n community node: send your AI Agent / LLM executions to Verica as evaluable traces.",
   "license": "MIT",
   "keywords": [

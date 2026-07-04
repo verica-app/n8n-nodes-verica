@@ -1,1 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60"><rect width="60" height="60" rx="12" fill="#111827"/><path d="M16 18l14 26 14-26h-9l-5 10-5-10z" fill="#22d3ee"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Brand mark: the Verica symbol (white) on a black rounded square. -->
+  <rect width="32" height="32" rx="7" fill="#19e76e" />
+  <!-- symbol viewBox is 0 0 892.5 816.91; scaled to ~20px wide and centered. -->
+  <g transform="translate(6 6.85) scale(0.0224)" fill="#000000">
+    <polygon points="764.83 17.13 884.51 17.46 843.9 102.53 801.72 188.27 496.57 799.37 393.96 799.78 305.44 620.12 173.8 352.15 8 17.33 129.72 17.46 265.79 300.56 382.85 537.66 443.74 657.4 514.14 521.47 710.57 128.86 764.83 17.13" />
+  </g>
+</svg>

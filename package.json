@@ -11,6 +11,10 @@
     "evals"
   ],
   "homepage": "https://verica.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/verica-app/n8n-nodes-verica.git"
+  },
   "main": "dist/index.js",
   "files": [
     "dist"

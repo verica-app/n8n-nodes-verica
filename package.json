@@ -1,0 +1,45 @@
+{
+  "name": "n8n-nodes-verica",
+  "version": "0.1.0",
+  "description": "n8n community node: send your AI Agent / LLM executions to Verica as evaluable traces.",
+  "license": "MIT",
+  "keywords": [
+    "n8n-community-node-package",
+    "verica",
+    "observability",
+    "llm",
+    "evals"
+  ],
+  "homepage": "https://verica.app",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/VericaApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/VericaTrace/VericaTrace.node.js"
+    ]
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc && cp src/nodes/VericaTrace/verica.svg dist/nodes/VericaTrace/",
+    "prepublishOnly": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "echo 'lint: n8n-nodes-verica ok'"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "devDependencies": {
+    "n8n-workflow": "^2.16.0",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.6"
+  }
+}

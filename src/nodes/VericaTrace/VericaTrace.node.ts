@@ -1,0 +1,173 @@
+import type {
+  IDataObject,
+  IExecuteFunctions,
+  INodeExecutionData,
+  INodeType,
+  INodeTypeDescription,
+} from 'n8n-workflow';
+import { NodeConnectionTypes } from 'n8n-workflow';
+import {
+  buildTracePayload,
+  inferProvider,
+  normalizeIntermediateSteps,
+  randomHex,
+} from '../../mapper';
+
+const numOrNull = (v: unknown): number | null => {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+export class VericaTrace implements INodeType {
+  description: INodeTypeDescription = {
+    displayName: 'Verica Trace',
+    name: 'vericaTrace',
+    icon: 'file:verica.svg',
+    group: ['transform'],
+    version: 1,
+    subtitle: '={{ $parameter.model || "trace" }}',
+    description: 'Sends the previous AI step to Verica as an evaluable trace',
+    defaults: { name: 'Verica Trace' },
+    inputs: [NodeConnectionTypes.Main],
+    outputs: [NodeConnectionTypes.Main],
+    credentials: [{ name: 'vericaApi', required: true }],
+    properties: [
+      {
+        displayName: 'Model',
+        name: 'model',
+        type: 'string',
+        default: '',
+        placeholder: 'gpt-4o',
+        description: 'The model the upstream AI step used (needed to price the trace)',
+      },
+      {
+        displayName: 'Input',
+        name: 'input',
+        type: 'string',
+        default: '={{ $json.chatInput || "" }}',
+        description:
+          "Defaults to $json.chatInput; for a chat workflow point it at your trigger, e.g. {{ $('When chat message received').item.json.chatInput }}",
+      },
+      {
+        displayName: 'Output',
+        name: 'output',
+        type: 'string',
+        default: '={{ $json.output || "" }}',
+        description: 'The model/agent answer',
+      },
+      {
+        displayName: 'Tool Calls',
+        name: 'toolCalls',
+        type: 'json',
+        default: '={{ $json.intermediateSteps || [] }}',
+        description:
+          'AI Agent intermediate steps (enable "Return intermediate steps" on the agent)',
+      },
+      {
+        displayName: 'Options',
+        name: 'options',
+        type: 'collection',
+        placeholder: 'Add option',
+        default: {},
+        options: [
+          {
+            displayName: 'Provider',
+            name: 'provider',
+            type: 'options',
+            options: [
+              { name: 'Auto (from model)', value: 'auto' },
+              { name: 'OpenAI', value: 'openai' },
+              { name: 'Anthropic', value: 'anthropic' },
+              { name: 'Google', value: 'google' },
+            ],
+            default: 'auto',
+          },
+          {
+            displayName: 'Session ID',
+            name: 'sessionId',
+            type: 'string',
+            default: '={{ $json.sessionId || "" }}',
+            description:
+              "Defaults to $json.sessionId; for a chat workflow point it at your trigger, e.g. {{ $('When chat message received').item.json.sessionId }}",
+          },
+          { displayName: 'Input Tokens', name: 'inputTokens', type: 'string', default: '' },
+          { displayName: 'Output Tokens', name: 'outputTokens', type: 'string', default: '' },
+          { displayName: 'Latency (Ms)', name: 'latencyMs', type: 'string', default: '' },
+          {
+            displayName: 'Tags',
+            name: 'tags',
+            type: 'string',
+            default: '',
+            description: 'Comma-separated tags added to the trace',
+          },
+        ],
+      },
+    ],
+  };
+
+  async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+    const items = this.getInputData();
+    // Fail-open: credential/endpoint resolution must NEVER break the host
+    // workflow either. On failure, annotate every item and pass them through.
+    let endpoint: string;
+    try {
+      const credentials = await this.getCredentials('vericaApi');
+      endpoint = String(credentials.endpoint ?? 'https://ingest.verica.app').replace(/\/+$/, '');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return [
+        items.map((item, i) => ({
+          json: { ...item.json, vericaError: message },
+          pairedItem: { item: i },
+        })),
+      ];
+    }
+    const returned: INodeExecutionData[] = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const out: INodeExecutionData = { json: { ...items[i]!.json }, pairedItem: { item: i } };
+      // Fail-open: a tracing node must NEVER break the host workflow. Any error
+      // (bad expression, receiver down, 401) is annotated on the item instead.
+      try {
+        const options = this.getNodeParameter('options', i, {}) as Record<string, unknown>;
+        const model = String(this.getNodeParameter('model', i, ''));
+        const provider =
+          options.provider == null || options.provider === 'auto'
+            ? inferProvider(model)
+            : String(options.provider);
+        const payload = buildTracePayload({
+          input: String(this.getNodeParameter('input', i, '')),
+          output: String(this.getNodeParameter('output', i, '')),
+          toolCalls: normalizeIntermediateSteps(this.getNodeParameter('toolCalls', i, [])),
+          model,
+          provider,
+          sessionId: String(options.sessionId ?? ''),
+          inputTokens: numOrNull(options.inputTokens),
+          outputTokens: numOrNull(options.outputTokens),
+          latencyMs: numOrNull(options.latencyMs),
+          tags: String(options.tags ?? '')
+            .split(',')
+            .map((t) => t.trim())
+            .filter((t) => t.length > 0),
+          workflowName: this.getWorkflow().name ?? '',
+          executionId: this.getExecutionId(),
+          nowMs: Date.now(),
+          randomHex,
+        });
+        await this.helpers.httpRequestWithAuthentication.call(this, 'vericaApi', {
+          method: 'POST',
+          url: `${endpoint}/v1/traces`,
+          headers: { 'x-verica-source': 'n8n' },
+          body: payload.body as IDataObject,
+          json: true,
+        });
+        out.json.vericaTraceId = payload.traceId;
+      } catch (error) {
+        out.json.vericaError = error instanceof Error ? error.message : String(error);
+      }
+      returned.push(out);
+    }
+    return [returned];
+  }
+}

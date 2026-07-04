@@ -1,0 +1,125 @@
+import { describe, expect, it } from 'vitest';
+import {
+  buildTracePayload,
+  inferProvider,
+  normalizeIntermediateSteps,
+  randomHex,
+  type TraceFields,
+} from './mapper';
+
+const fixedHex = (bytes: number) => 'ab'.repeat(bytes);
+
+const base: TraceFields = {
+  input: 'What is the capital of France?',
+  output: 'Paris.',
+  toolCalls: [{ tool: 'search', toolInput: { query: 'capital of France' } }],
+  model: 'gpt-4o',
+  provider: '',
+  sessionId: 'sess-1',
+  inputTokens: 100,
+  outputTokens: 20,
+  latencyMs: 1200,
+  tags: ['checkout'],
+  workflowName: 'My flow',
+  executionId: '42',
+  nowMs: 1_751_600_000_000,
+  randomHex: fixedHex,
+};
+
+function attrsOf(body: unknown): Record<string, unknown> {
+  const span = (body as any).resourceSpans[0].scopeSpans[0].spans[0];
+  return Object.fromEntries(span.attributes.map((a: any) => [a.key, a.value]));
+}
+
+describe('buildTracePayload', () => {
+  it('emits the gen_ai.* attributes the Verica normalizer accepts', () => {
+    const { traceId, body } = buildTracePayload(base);
+    expect(traceId).toBe('ab'.repeat(16));
+    const span = (body as any).resourceSpans[0].scopeSpans[0].spans[0];
+    expect(span.traceId).toHaveLength(32);
+    expect(span.spanId).toHaveLength(16);
+    expect(span.kind).toBe(3);
+    expect(span.startTimeUnixNano).toBe(`${base.nowMs - 1200}000000`);
+    expect(span.endTimeUnixNano).toBe(`${base.nowMs}000000`);
+
+    const attrs = attrsOf(body);
+    expect(attrs['gen_ai.request.model']).toEqual({ stringValue: 'gpt-4o' });
+    expect(attrs['gen_ai.provider.name']).toEqual({ stringValue: 'openai' });
+    expect(attrs['gen_ai.conversation.id']).toEqual({ stringValue: 'sess-1' });
+    expect(attrs['gen_ai.usage.input_tokens']).toEqual({ intValue: '100' });
+    expect(attrs['gen_ai.usage.output_tokens']).toEqual({ intValue: '20' });
+
+    const input = JSON.parse((attrs['gen_ai.input.messages'] as any).stringValue);
+    expect(input).toEqual([{ role: 'user', content: 'What is the capital of France?' }]);
+
+    const output = JSON.parse((attrs['gen_ai.output.messages'] as any).stringValue);
+    expect(output[0].role).toBe('assistant');
+    expect(output[0].content).toBe('Paris.');
+    expect(output[0].tool_calls).toEqual([
+      { function: { name: 'search', arguments: '{"query":"capital of France"}' } },
+    ]);
+
+    const tags = JSON.parse((attrs['verica.tags'] as any).stringValue);
+    expect(tags).toEqual(['n8n:My flow', 'execution:42', 'checkout']);
+  });
+
+  it('omits what it does not know: no usage attrs, no end time, no model/provider/session', () => {
+    const { body } = buildTracePayload({
+      ...base,
+      model: '',
+      provider: '',
+      sessionId: '',
+      inputTokens: null,
+      outputTokens: null,
+      latencyMs: null,
+      toolCalls: [],
+    });
+    const attrs = attrsOf(body);
+    expect(attrs['gen_ai.request.model']).toBeUndefined();
+    expect(attrs['gen_ai.provider.name']).toBeUndefined();
+    expect(attrs['gen_ai.conversation.id']).toBeUndefined();
+    expect(attrs['gen_ai.usage.input_tokens']).toBeUndefined();
+    const span = (body as any).resourceSpans[0].scopeSpans[0].spans[0];
+    expect(span.endTimeUnixNano).toBeUndefined();
+    const output = JSON.parse((attrs['gen_ai.output.messages'] as any).stringValue);
+    expect(output[0].tool_calls).toBeUndefined();
+  });
+
+  it('an explicit provider wins over inference', () => {
+    const { body } = buildTracePayload({ ...base, provider: 'google', model: 'weird-model' });
+    expect(attrsOf(body)['gen_ai.provider.name']).toEqual({ stringValue: 'google' });
+  });
+});
+
+describe('inferProvider', () => {
+  it('mirrors the Ruby SDK heuristic', () => {
+    expect(inferProvider('gemini-2.0-flash')).toBe('google');
+    expect(inferProvider('claude-sonnet-5')).toBe('anthropic');
+    expect(inferProvider('gpt-4o')).toBe('openai');
+    expect(inferProvider('')).toBe('');
+  });
+});
+
+describe('normalizeIntermediateSteps', () => {
+  it('accepts LangChain intermediateSteps ({action:{tool,toolInput}})', () => {
+    expect(
+      normalizeIntermediateSteps([
+        { action: { tool: 'search', toolInput: { q: 1 } }, observation: 'x' },
+      ]),
+    ).toEqual([{ tool: 'search', toolInput: { q: 1 } }]);
+  });
+
+  it('accepts flat {tool,toolInput} entries and drops junk', () => {
+    expect(normalizeIntermediateSteps([{ tool: 't', toolInput: 'raw' }, 42, null])).toEqual([
+      { tool: 't', toolInput: 'raw' },
+    ]);
+    expect(normalizeIntermediateSteps('nope')).toEqual([]);
+  });
+});
+
+describe('randomHex', () => {
+  it('returns lowercase hex of 2 chars per byte', () => {
+    expect(randomHex(16)).toMatch(/^[0-9a-f]{32}$/);
+    expect(randomHex(8)).toMatch(/^[0-9a-f]{16}$/);
+  });
+});

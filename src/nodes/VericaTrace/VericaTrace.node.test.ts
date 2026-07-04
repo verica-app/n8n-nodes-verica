@@ -48,6 +48,30 @@ describe('VericaTrace.execute', () => {
     expect(result[0]![0]!.json.vericaTraceId).toMatch(/^[0-9a-f]{32}$/);
   });
 
+  it("coerces the OpenAI 'Message a model' output array to text, not [object Object]", async () => {
+    const messageAModelOutput = [
+      {
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'Hola', annotations: [] }],
+      },
+    ];
+    const { ctx, httpRequestWithAuthentication } = makeContext({
+      ...params,
+      output: messageAModelOutput,
+    });
+    await new VericaTrace().execute.call(ctx as never);
+
+    const [, req] = httpRequestWithAuthentication.mock.calls[0]!;
+    const span = req.body.resourceSpans[0].scopeSpans[0].spans[0];
+    const attrs = Object.fromEntries(
+      span.attributes.map((a: { key: string; value: unknown }) => [a.key, a.value]),
+    );
+    const output = JSON.parse(attrs['gen_ai.output.messages'].stringValue);
+    expect(output[0].content).toBe('Hola');
+    expect(output[0].content).not.toContain('[object Object]');
+  });
+
   it('fail-open: an export error never throws, it annotates the item', async () => {
     const { ctx } = makeContext(params, { reject: true });
     const result = await new VericaTrace().execute.call(ctx as never);

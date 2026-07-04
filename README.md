@@ -16,7 +16,9 @@ n8n community node that sends your AI Agent / LLM executions to
    cloud.
 2. Drop **Verica Trace** after your AI Agent (or any LLM step). The defaults
    read `$json.output`, `$json.chatInput`, `$json.intermediateSteps` and
-   `$json.sessionId`; set **Model** so the trace can be priced.
+   `$json.sessionId`; set **Model** so the trace can be priced. It works after
+   the AI Agent or "Message a model" out of the box: object outputs are
+   flattened to text automatically.
 3. Enable **Return intermediate steps** on the AI Agent so tool calls land in
    the trace (Verica's `tool_check` grader can then assert on them).
 

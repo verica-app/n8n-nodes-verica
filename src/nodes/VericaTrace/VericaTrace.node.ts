@@ -8,6 +8,7 @@ import type {
 import { NodeConnectionTypes } from 'n8n-workflow';
 import {
   buildTracePayload,
+  coerceText,
   inferProvider,
   normalizeIntermediateSteps,
   randomHex,
@@ -54,7 +55,8 @@ export class VericaTrace implements INodeType {
         name: 'output',
         type: 'string',
         default: '={{ $json.output || "" }}',
-        description: 'The model/agent answer',
+        description:
+          'The model/agent answer. Object shapes (AI Agent output, "Message a model" responses) are flattened to text automatically.',
       },
       {
         displayName: 'Tool Calls',
@@ -137,8 +139,8 @@ export class VericaTrace implements INodeType {
             ? inferProvider(model)
             : String(options.provider);
         const payload = buildTracePayload({
-          input: String(this.getNodeParameter('input', i, '')),
-          output: String(this.getNodeParameter('output', i, '')),
+          input: coerceText(this.getNodeParameter('input', i, '')),
+          output: coerceText(this.getNodeParameter('output', i, '')),
           toolCalls: normalizeIntermediateSteps(this.getNodeParameter('toolCalls', i, [])),
           model,
           provider,

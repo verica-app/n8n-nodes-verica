@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildTracePayload,
+  coerceText,
   inferProvider,
   normalizeIntermediateSteps,
   randomHex,
@@ -114,6 +115,43 @@ describe('normalizeIntermediateSteps', () => {
       { tool: 't', toolInput: 'raw' },
     ]);
     expect(normalizeIntermediateSteps('nope')).toEqual([]);
+  });
+});
+
+describe('coerceText', () => {
+  it("flattens the OpenAI 'Message a model' output array to its text", () => {
+    const output = [
+      {
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'Hola', annotations: [] }],
+      },
+    ];
+    expect(coerceText(output)).toBe('Hola');
+  });
+
+  it('flattens a chat-completions choices shape to the message content', () => {
+    expect(coerceText({ choices: [{ message: { content: 'hi' } }] })).toBe('hi');
+  });
+
+  it('passes a plain string through unchanged', () => {
+    expect(coerceText('already text')).toBe('already text');
+  });
+
+  it('never yields [object Object]: junk objects become their JSON string', () => {
+    const junk = { foo: 1, bar: { baz: 2 } };
+    const out = coerceText(junk);
+    expect(out).not.toContain('[object Object]');
+    expect(out).toBe(JSON.stringify(junk));
+  });
+
+  it('joins an array of strings with newlines', () => {
+    expect(coerceText(['a', 'b', 'c'])).toBe('a\nb\nc');
+  });
+
+  it('returns empty string for null/undefined', () => {
+    expect(coerceText(null)).toBe('');
+    expect(coerceText(undefined)).toBe('');
   });
 });
 

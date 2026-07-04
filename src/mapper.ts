@@ -39,6 +39,22 @@ export function randomHex(bytes: number): string {
   return out;
 }
 
+/** Best-effort text from common LLM output shapes; never '[object Object]'. */
+export function coerceText(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map(coerceText).filter(Boolean).join('\n');
+  const rec = value as Record<string, unknown>;
+  for (const key of ['output_text', 'text', 'content', 'message', 'output', 'choices']) {
+    if (key in rec) {
+      const t = coerceText(rec[key]);
+      if (t.length > 0) return t;
+    }
+  }
+  return JSON.stringify(value);
+}
+
 /** Mirror of the Ruby SDK's Verica::Providers.for_model heuristic. */
 export function inferProvider(model: string): string {
   if (model.length === 0) return '';

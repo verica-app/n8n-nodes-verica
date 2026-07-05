@@ -48,7 +48,7 @@ export class VericaTrace implements INodeType {
         type: 'string',
         default: '={{ $json.chatInput || "" }}',
         description:
-          "Defaults to $json.chatInput; for a chat workflow point it at your trigger, e.g. {{ $('When chat message received').item.json.chatInput }}",
+          "Defaults to $json.chatInput; for a chat workflow point it at your trigger, e.g. {{ $('When chat message received').item.json.chatInput }}. \"Message a model\" does not echo the prompt: read it from the node's parameters, e.g. {{ $('Message a model').params.responses.values[0].content }} (hover the Prompt field to confirm the path).",
       },
       {
         displayName: 'Output',
@@ -64,7 +64,7 @@ export class VericaTrace implements INodeType {
         type: 'json',
         default: '={{ $json.intermediateSteps || $json.output || [] }}',
         description:
-          'AI Agent intermediate steps (enable "Return intermediate steps" on the agent), else the raw "Message a model" output array. Non-tool entries are ignored.',
+          'AI Agent intermediate steps (enable "Return intermediate steps" on the agent), else a raw output array containing tool/function calls; non-tool entries are ignored. Note: "Message a model" with attached tools runs its tool loop internally and returns only the final answer, so its executed calls are not capturable; use the AI Agent for tool-using workflows.',
       },
       {
         displayName: 'Options',

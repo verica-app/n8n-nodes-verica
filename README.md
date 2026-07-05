@@ -37,6 +37,13 @@ runs its tool loop internally and returns only the final answer, so its
 executed calls are not capturable downstream. For tool-using workflows, use
 the AI Agent.
 
+With an **AI Agent**, map **Model** to the chat-model sub-node's parameter,
+e.g. `{{ $('OpenAI Chat Model').params.model.value || $('OpenAI Chat Model').params.model }}`.
+Token usage is NOT capturable in agent workflows: n8n does not propagate the
+chat model's `tokenUsage` to the agent output or to downstream expressions
+(open issue [n8n#26302](https://github.com/n8n-io/n8n/issues/26302)); the
+trace lands without tokens/cost but stays fully evaluable.
+
 The node is **fail-open**: an export error never breaks your workflow; the item
 passes through with a `vericaError` annotation instead.
 

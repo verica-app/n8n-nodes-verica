@@ -40,7 +40,8 @@ export class VericaTrace implements INodeType {
         type: 'string',
         default: '',
         placeholder: 'gpt-4o',
-        description: 'The model the upstream AI step used (needed to price the trace)',
+        description:
+          "The model the upstream AI step used (needed to price the trace). With \"Message a model\" use {{ $json.model }}; with an AI Agent read the chat-model sub-node's parameter, e.g. {{ $('OpenAI Chat Model').params.model.value || $('OpenAI Chat Model').params.model }}.",
       },
       {
         displayName: 'Input',

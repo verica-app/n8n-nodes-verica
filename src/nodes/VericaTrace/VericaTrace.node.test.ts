@@ -56,8 +56,10 @@ describe('VericaTrace.execute', () => {
         content: [{ type: 'output_text', text: 'Hola', annotations: [] }],
       },
     ];
+    // No tool calls here, so the answer is the sole output message: index 0.
     const { ctx, httpRequestWithAuthentication } = makeContext({
       ...params,
+      toolCalls: [],
       output: messageAModelOutput,
     });
     await new VericaTrace().execute.call(ctx as never);

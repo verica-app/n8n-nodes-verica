@@ -7,6 +7,8 @@
 export interface ToolCallInput {
   tool: string;
   toolInput: unknown;
+  /** LangChain sibling of the action: the tool's result, when the step carries one. */
+  observation?: unknown;
 }
 
 export interface TraceFields {
@@ -98,13 +100,14 @@ export function normalizeIntermediateSteps(raw: unknown): ToolCallInput[] {
       }
     }
 
-    // LangChain: {action:{tool,toolInput}} or flat {tool,toolInput}.
-    const action =
-      rec.action != null && typeof rec.action === 'object'
-        ? (rec.action as Record<string, unknown>)
-        : rec;
+    // LangChain: {action:{tool,toolInput}, observation} or flat {tool,toolInput}.
+    // Only the nested-action shape carries a sibling `observation` (the tool result).
+    const hasNestedAction = rec.action != null && typeof rec.action === 'object';
+    const action = hasNestedAction ? (rec.action as Record<string, unknown>) : rec;
     if (typeof action.tool !== 'string' || action.tool.length === 0) continue;
-    out.push({ tool: action.tool, toolInput: action.toolInput });
+    const call: ToolCallInput = { tool: action.tool, toolInput: action.toolInput };
+    if (hasNestedAction && 'observation' in rec) call.observation = rec.observation;
+    out.push(call);
   }
   return out;
 }
@@ -118,14 +121,24 @@ export function buildTracePayload(f: TraceFields): { traceId: string; body: unkn
   const i = (key: string, v: number): OtlpAttr => ({ key, value: { intValue: String(v) } });
 
   const provider = f.provider.length > 0 ? f.provider : inferProvider(f.model);
-  const toolCalls = f.toolCalls.map((c) => ({
+  const toFunction = (c: ToolCallInput) => ({
     function: {
       name: c.tool,
       arguments: typeof c.toolInput === 'string' ? c.toolInput : JSON.stringify(c.toolInput ?? {}),
     },
-  }));
-  const outputMessage: Record<string, unknown> = { role: 'assistant', content: f.output };
-  if (toolCalls.length > 0) outputMessage.tool_calls = toolCalls;
+  });
+  // Chronological sequence: for each tool call, an assistant message carrying only
+  // that call, then (when it produced text) a tool message with the observation;
+  // finally the assistant's answer. The viewer renders one block per message in
+  // order, so the conversation reads call -> result -> ... -> answer. The tool-call
+  // assistant messages have no content key (empty text, which the flattener drops).
+  const outputMessages: Record<string, unknown>[] = [];
+  for (const c of f.toolCalls) {
+    outputMessages.push({ role: 'assistant', tool_calls: [toFunction(c)] });
+    const observation = coerceText(c.observation);
+    if (observation.length > 0) outputMessages.push({ role: 'tool', content: observation });
+  }
+  outputMessages.push({ role: 'assistant', content: f.output });
 
   const tags = [
     `n8n:${f.workflowName}`,
@@ -139,7 +152,7 @@ export function buildTracePayload(f: TraceFields): { traceId: string; body: unkn
 
   const attributes: OtlpAttr[] = [
     s('gen_ai.input.messages', JSON.stringify([{ role: 'user', content: f.input }])),
-    s('gen_ai.output.messages', JSON.stringify([outputMessage])),
+    s('gen_ai.output.messages', JSON.stringify(outputMessages)),
     s('verica.tags', JSON.stringify(tags)),
   ];
   if (f.model.length > 0) attributes.push(s('gen_ai.request.model', f.model));

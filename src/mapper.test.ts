@@ -57,12 +57,17 @@ describe('buildTracePayload', () => {
     const input = JSON.parse((attrs['gen_ai.input.messages'] as any).stringValue);
     expect(input).toEqual([{ role: 'user', content: 'What is the capital of France?' }]);
 
+    // Chronological: the tool-call-only assistant message, then the answer. base's
+    // single tool call has no observation, so no tool message sits between them.
     const output = JSON.parse((attrs['gen_ai.output.messages'] as any).stringValue);
-    expect(output[0].role).toBe('assistant');
-    expect(output[0].content).toBe('Paris.');
-    expect(output[0].tool_calls).toEqual([
-      { function: { name: 'search', arguments: '{"query":"capital of France"}' } },
+    expect(output).toEqual([
+      {
+        role: 'assistant',
+        tool_calls: [{ function: { name: 'search', arguments: '{"query":"capital of France"}' } }],
+      },
+      { role: 'assistant', content: 'Paris.' },
     ]);
+    expect(output[0].content).toBeUndefined();
 
     const tags = JSON.parse((attrs['verica.tags'] as any).stringValue);
     expect(tags).toEqual(['n8n:My flow', 'execution:42', 'checkout']);
@@ -98,6 +103,61 @@ describe('buildTracePayload', () => {
     const { body } = buildTracePayload({ ...base, provider: 'google', model: 'weird-model' });
     expect(attrsOf(body)['gen_ai.provider.name']).toEqual({ stringValue: 'google' });
   });
+
+  it('emits a chronological call -> result sequence, in order, then the answer', () => {
+    const { body } = buildTracePayload({
+      ...base,
+      output: 'Paris.',
+      toolCalls: [
+        { tool: 'search', toolInput: { query: 'a' }, observation: 'obs-a' },
+        { tool: 'lookup', toolInput: { id: 2 }, observation: 'obs-b' },
+      ],
+    });
+    const output = JSON.parse((attrsOf(body)['gen_ai.output.messages'] as any).stringValue);
+    expect(output).toEqual([
+      {
+        role: 'assistant',
+        tool_calls: [{ function: { name: 'search', arguments: '{"query":"a"}' } }],
+      },
+      { role: 'tool', content: 'obs-a' },
+      { role: 'assistant', tool_calls: [{ function: { name: 'lookup', arguments: '{"id":2}' } }] },
+      { role: 'tool', content: 'obs-b' },
+      { role: 'assistant', content: 'Paris.' },
+    ]);
+  });
+
+  it('with zero tool calls the output is just the answer message', () => {
+    const { body } = buildTracePayload({ ...base, output: 'Paris.', toolCalls: [] });
+    const output = JSON.parse((attrsOf(body)['gen_ai.output.messages'] as any).stringValue);
+    expect(output).toEqual([{ role: 'assistant', content: 'Paris.' }]);
+  });
+
+  it('coerces a non-string observation to text for the tool message', () => {
+    const { body } = buildTracePayload({
+      ...base,
+      output: 'done',
+      toolCalls: [{ tool: 'search', toolInput: {}, observation: { text: 'from object' } }],
+    });
+    const output = JSON.parse((attrsOf(body)['gen_ai.output.messages'] as any).stringValue);
+    expect(output).toEqual([
+      { role: 'assistant', tool_calls: [{ function: { name: 'search', arguments: '{}' } }] },
+      { role: 'tool', content: 'from object' },
+      { role: 'assistant', content: 'done' },
+    ]);
+  });
+
+  it('a tool call WITHOUT an observation emits its assistant message but no tool message', () => {
+    const { body } = buildTracePayload({
+      ...base,
+      output: 'done',
+      toolCalls: [{ tool: 'search', toolInput: {} }],
+    });
+    const output = JSON.parse((attrsOf(body)['gen_ai.output.messages'] as any).stringValue);
+    expect(output).toEqual([
+      { role: 'assistant', tool_calls: [{ function: { name: 'search', arguments: '{}' } }] },
+      { role: 'assistant', content: 'done' },
+    ]);
+  });
 });
 
 describe('inferProvider', () => {
@@ -110,15 +170,15 @@ describe('inferProvider', () => {
 });
 
 describe('normalizeIntermediateSteps', () => {
-  it('accepts LangChain intermediateSteps ({action:{tool,toolInput}})', () => {
+  it('accepts LangChain intermediateSteps ({action:{tool,toolInput}}) and captures the observation', () => {
     expect(
       normalizeIntermediateSteps([
         { action: { tool: 'search', toolInput: { q: 1 } }, observation: 'x' },
       ]),
-    ).toEqual([{ tool: 'search', toolInput: { q: 1 } }]);
+    ).toEqual([{ tool: 'search', toolInput: { q: 1 }, observation: 'x' }]);
   });
 
-  it('accepts flat {tool,toolInput} entries and drops junk', () => {
+  it('captures no observation for the flat shape (its sibling has no result)', () => {
     expect(normalizeIntermediateSteps([{ tool: 't', toolInput: 'raw' }, 42, null])).toEqual([
       { tool: 't', toolInput: 'raw' },
     ]);

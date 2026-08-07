@@ -22,6 +22,14 @@ n8n community node that sends your AI Agent / LLM executions to
 3. Enable **Return intermediate steps** on the AI Agent so tool calls land in
    the trace (Verica's `tool_check` grader can then assert on them).
 
+**Sessions.** Executions sharing a `sessionId` (the Chat Trigger provides one)
+reassemble into a Verica session, one turn per execution. Turns are stored as
+deltas matched on byte-identical text, so if you map **Input** to something
+richer than the new message (for example a rebuilt history), resend it exactly
+as sent before: any per-turn mutation (like appending "Respond in JSON" to the
+last message only) makes every turn degrade to a full copy of the
+conversation.
+
 With **"Message a model"** (OpenAI Responses API), token usage is picked up
 from the response automatically: adding the **Input Tokens** / **Output
 Tokens** options captures the response's `usage`, including the **Reasoning

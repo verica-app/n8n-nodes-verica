@@ -1,7 +1,8 @@
 # n8n-nodes-verica
 
-n8n community node that sends your AI Agent / LLM executions to
-[Verica](https://verica.app) as evaluable traces.
+n8n community node for LLM observability: it sends your AI Agent / LLM
+executions to [Verica](https://verica.app) as traces, with inputs, outputs,
+tool calls, token usage and cost.
 
 ## Install
 

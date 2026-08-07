@@ -1,5 +1,6 @@
 import type {
   IAuthenticateGeneric,
+  Icon,
   ICredentialTestRequest,
   ICredentialType,
   INodeProperties,
@@ -9,6 +10,7 @@ export class VericaApi implements ICredentialType {
   name = 'vericaApi';
   displayName = 'Verica API';
   documentationUrl = 'https://verica.app';
+  icon: Icon = { light: 'file:verica.svg', dark: 'file:verica.dark.svg' };
   properties: INodeProperties[] = [
     {
       displayName: 'Ingest Token',
@@ -17,7 +19,7 @@ export class VericaApi implements ICredentialType {
       typeOptions: { password: true },
       default: '',
       required: true,
-      description: 'A Verica API token with the ingest scope (Configuración → Tokens)',
+      description: 'A Verica API token with the ingest scope (Settings → API tokens)',
     },
     {
       displayName: 'Endpoint',

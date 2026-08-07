@@ -12,7 +12,7 @@ import {
   inferProvider,
   normalizeIntermediateSteps,
   randomHex,
-} from '../../mapper';
+} from './mapper';
 
 const numOrNull = (v: unknown): number | null => {
   if (v == null || v === '') return null;
@@ -24,12 +24,16 @@ export class VericaTrace implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Verica Trace',
     name: 'vericaTrace',
-    icon: 'file:verica.svg',
+    icon: { light: 'file:verica.svg', dark: 'file:verica.dark.svg' },
     group: ['transform'],
     version: 1,
     subtitle: '={{ $parameter.model || "trace" }}',
-    description: 'Sends the previous AI step to Verica as an evaluable trace',
+    description: 'Sends the previous AI step to Verica as a monitored trace',
     defaults: { name: 'Verica Trace' },
+    // The type only allows opting in; omitting the property is the way to opt out,
+    // which the community-node lint flags. Exposing it as a tool is harmless: it
+    // still requires the credential and explicit parameters from the workflow author.
+    usableAsTool: true,
     inputs: [NodeConnectionTypes.Main],
     outputs: [NodeConnectionTypes.Main],
     credentials: [{ name: 'vericaApi', required: true }],
@@ -40,6 +44,7 @@ export class VericaTrace implements INodeType {
         type: 'string',
         default: '',
         placeholder: 'gpt-4o',
+        // eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-json -- `$json` is n8n's expression variable; it is lowercase by definition
         description:
           "The model the upstream AI step used (needed to price the trace). With \"Message a model\" use {{ $json.model }}; with an AI Agent read the chat-model sub-node's parameter, e.g. {{ $('OpenAI Chat Model').params.model.value || $('OpenAI Chat Model').params.model }}.",
       },
@@ -48,6 +53,7 @@ export class VericaTrace implements INodeType {
         name: 'input',
         type: 'string',
         default: '={{ $json.chatInput || "" }}',
+        // eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-json -- `$json` is n8n's expression variable; it is lowercase by definition
         description:
           "Defaults to $json.chatInput; for a chat workflow point it at your trigger, e.g. {{ $('When chat message received').item.json.chatInput }}. \"Message a model\" does not echo the prompt: read it from the node's parameters, e.g. {{ $('Message a model').params.responses.values[0].content }} (hover the Prompt field to confirm the path).",
       },
@@ -73,39 +79,37 @@ export class VericaTrace implements INodeType {
         type: 'collection',
         placeholder: 'Add option',
         default: {},
+        // Alphabetized by display name, as the community-node lint requires.
+        // The four token fields are COUNTS, not secrets: the sensitive-parameter
+        // rule matches any name containing "token" (its own allowlist already
+        // exempts `maxTokens` for the same reason). Renaming them would silently
+        // drop the setting from workflows already using the node.
         options: [
           {
-            displayName: 'Provider',
-            name: 'provider',
-            type: 'options',
-            options: [
-              { name: 'Auto (from model)', value: 'auto' },
-              { name: 'OpenAI', value: 'openai' },
-              { name: 'Anthropic', value: 'anthropic' },
-              { name: 'Google', value: 'google' },
-            ],
-            default: 'auto',
-          },
-          {
-            displayName: 'Session ID',
-            name: 'sessionId',
+            displayName: 'Cached Tokens',
+            name: 'cachedTokens',
+            // eslint-disable-next-line n8n-nodes-base/node-param-type-options-password-missing -- token count, not a secret
             type: 'string',
-            default: '={{ $json.sessionId || "" }}',
+            default:
+              '={{ (($json.usage || {}).input_tokens_details || {}).cached_tokens ?? (($json.usage || {}).prompt_tokens_details || {}).cached_tokens ?? "" }}',
             description:
-              "Defaults to $json.sessionId; for a chat workflow point it at your trigger, e.g. {{ $('When chat message received').item.json.sessionId }}",
+              'A breakdown of input tokens. Auto-reads OpenAI usage (input_tokens_details/prompt_tokens_details.cached_tokens) from the response when present.',
           },
           {
             displayName: 'Input Tokens',
             name: 'inputTokens',
+            // eslint-disable-next-line n8n-nodes-base/node-param-type-options-password-missing -- token count, not a secret
             type: 'string',
             default:
               '={{ ($json.usage || {}).input_tokens ?? ($json.usage || {}).prompt_tokens ?? "" }}',
             description:
               'Auto-reads OpenAI usage (input_tokens/prompt_tokens) from the response when present',
           },
+          { displayName: 'Latency (Ms)', name: 'latencyMs', type: 'string', default: '' },
           {
             displayName: 'Output Tokens',
             name: 'outputTokens',
+            // eslint-disable-next-line n8n-nodes-base/node-param-type-options-password-missing -- token count, not a secret
             type: 'string',
             default:
               '={{ ($json.usage || {}).output_tokens ?? ($json.usage || {}).completion_tokens ?? "" }}',
@@ -113,8 +117,21 @@ export class VericaTrace implements INodeType {
               'Auto-reads OpenAI usage (output_tokens/completion_tokens) from the response when present',
           },
           {
+            displayName: 'Provider',
+            name: 'provider',
+            type: 'options',
+            options: [
+              { name: 'Auto (From Model)', value: 'auto' },
+              { name: 'OpenAI', value: 'openai' },
+              { name: 'Anthropic', value: 'anthropic' },
+              { name: 'Google', value: 'google' },
+            ],
+            default: 'auto',
+          },
+          {
             displayName: 'Reasoning Tokens',
             name: 'reasoningTokens',
+            // eslint-disable-next-line n8n-nodes-base/node-param-type-options-password-missing -- token count, not a secret
             type: 'string',
             default:
               '={{ (($json.usage || {}).output_tokens_details || {}).reasoning_tokens ?? (($json.usage || {}).completion_tokens_details || {}).reasoning_tokens ?? "" }}',
@@ -122,15 +139,14 @@ export class VericaTrace implements INodeType {
               'A breakdown of output tokens. Auto-reads OpenAI usage (output_tokens_details/completion_tokens_details.reasoning_tokens) from the response when present.',
           },
           {
-            displayName: 'Cached Tokens',
-            name: 'cachedTokens',
+            displayName: 'Session ID',
+            name: 'sessionId',
             type: 'string',
-            default:
-              '={{ (($json.usage || {}).input_tokens_details || {}).cached_tokens ?? (($json.usage || {}).prompt_tokens_details || {}).cached_tokens ?? "" }}',
+            default: '={{ $json.sessionId || "" }}',
+            // eslint-disable-next-line n8n-nodes-base/node-param-description-miscased-json -- `$json` is n8n's expression variable; it is lowercase by definition
             description:
-              'A breakdown of input tokens. Auto-reads OpenAI usage (input_tokens_details/prompt_tokens_details.cached_tokens) from the response when present.',
+              "Defaults to $json.sessionId; for a chat workflow point it at your trigger, e.g. {{ $('When chat message received').item.json.sessionId }}",
           },
-          { displayName: 'Latency (Ms)', name: 'latencyMs', type: 'string', default: '' },
           {
             displayName: 'Tags',
             name: 'tags',

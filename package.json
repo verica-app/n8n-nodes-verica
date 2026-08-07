@@ -1,7 +1,7 @@
 {
   "name": "n8n-nodes-verica",
-  "version": "0.1.6",
-  "description": "n8n community node: send your AI Agent / LLM executions to Verica as evaluable traces.",
+  "version": "0.2.0",
+  "description": "LLM observability for your AI Agent and LLM steps: send each execution to Verica as a trace with tool calls, tokens and cost.",
   "license": "MIT",
   "author": {
     "name": "Verica",
@@ -11,20 +11,22 @@
     "n8n-community-node-package",
     "verica",
     "observability",
+    "monitoring",
+    "tracing",
     "llm",
-    "evals"
+    "ai-agent"
   ],
   "homepage": "https://verica.app",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/verica-app/n8n-nodes-verica.git"
   },
-  "main": "dist/index.js",
   "files": [
     "dist"
   ],
   "n8n": {
     "n8nNodesApiVersion": 1,
+    "strict": true,
     "credentials": [
       "dist/credentials/VericaApi.credentials.js"
     ],
@@ -36,16 +38,19 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc && cp src/nodes/VericaTrace/verica.svg dist/nodes/VericaTrace/",
+    "build": "n8n-node build && cp nodes/VericaTrace/VericaTrace.node.json dist/nodes/VericaTrace/",
+    "dev": "n8n-node dev",
     "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "echo 'lint: n8n-nodes-verica ok'"
+    "lint": "n8n-node lint",
+    "lint:fix": "n8n-node lint --fix"
   },
   "peerDependencies": {
     "n8n-workflow": "*"
   },
   "devDependencies": {
+    "@n8n/node-cli": "^0.42.1",
     "n8n-workflow": "^2.16.0",
     "typescript": "^5.7.2",
     "vitest": "^3.2.6"

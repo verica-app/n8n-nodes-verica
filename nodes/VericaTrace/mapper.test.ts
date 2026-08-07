@@ -29,16 +29,40 @@ const base: TraceFields = {
   randomHex: fixedHex,
 };
 
-function attrsOf(body: unknown): Record<string, unknown> {
-  const span = (body as any).resourceSpans[0].scopeSpans[0].spans[0];
-  return Object.fromEntries(span.attributes.map((a: any) => [a.key, a.value]));
+/** The slice of the OTLP shape these tests navigate. */
+type OtlpAttrValue = { stringValue?: string; intValue?: string };
+type OtlpSpan = {
+  traceId: string;
+  spanId: string;
+  kind: number;
+  startTimeUnixNano: string;
+  endTimeUnixNano?: string;
+  attributes: { key: string; value: OtlpAttrValue }[];
+};
+type OtlpBody = { resourceSpans: { scopeSpans: { spans: OtlpSpan[] }[] }[] };
+
+const spanOf = (body: unknown): OtlpSpan =>
+  (body as OtlpBody).resourceSpans[0].scopeSpans[0].spans[0];
+
+function attrsOf(body: unknown): Record<string, OtlpAttrValue | undefined> {
+  return Object.fromEntries(spanOf(body).attributes.map((a) => [a.key, a.value]));
 }
+
+/** Reads a JSON-encoded string attribute back into the shape the test asserts on. */
+const jsonAttr = <T>(attrs: Record<string, OtlpAttrValue | undefined>, key: string): T =>
+  JSON.parse(String(attrs[key]?.stringValue)) as T;
+
+type OutputMessage = {
+  role: string;
+  content?: string;
+  tool_calls?: { function: { name: string; arguments: string } }[];
+};
 
 describe('buildTracePayload', () => {
   it('emits the gen_ai.* attributes the Verica normalizer accepts', () => {
     const { traceId, body } = buildTracePayload(base);
     expect(traceId).toBe('ab'.repeat(16));
-    const span = (body as any).resourceSpans[0].scopeSpans[0].spans[0];
+    const span = spanOf(body);
     expect(span.traceId).toHaveLength(32);
     expect(span.spanId).toHaveLength(16);
     expect(span.kind).toBe(3);
@@ -54,12 +78,12 @@ describe('buildTracePayload', () => {
     expect(attrs['gen_ai.usage.reasoning_tokens']).toEqual({ intValue: '8' });
     expect(attrs['gen_ai.usage.cache_read.input_tokens']).toEqual({ intValue: '40' });
 
-    const input = JSON.parse((attrs['gen_ai.input.messages'] as any).stringValue);
+    const input = jsonAttr<OutputMessage[]>(attrs, 'gen_ai.input.messages');
     expect(input).toEqual([{ role: 'user', content: 'What is the capital of France?' }]);
 
     // Chronological: the tool-call-only assistant message, then the answer. base's
     // single tool call has no observation, so no tool message sits between them.
-    const output = JSON.parse((attrs['gen_ai.output.messages'] as any).stringValue);
+    const output = jsonAttr<OutputMessage[]>(attrs, 'gen_ai.output.messages');
     expect(output).toEqual([
       {
         role: 'assistant',
@@ -69,7 +93,7 @@ describe('buildTracePayload', () => {
     ]);
     expect(output[0].content).toBeUndefined();
 
-    const tags = JSON.parse((attrs['verica.tags'] as any).stringValue);
+    const tags = jsonAttr<string[]>(attrs, 'verica.tags');
     expect(tags).toEqual(['n8n:My flow', 'execution:42', 'checkout']);
   });
 
@@ -93,9 +117,9 @@ describe('buildTracePayload', () => {
     expect(attrs['gen_ai.usage.input_tokens']).toBeUndefined();
     expect(attrs['gen_ai.usage.reasoning_tokens']).toBeUndefined();
     expect(attrs['gen_ai.usage.cache_read.input_tokens']).toBeUndefined();
-    const span = (body as any).resourceSpans[0].scopeSpans[0].spans[0];
+    const span = spanOf(body);
     expect(span.endTimeUnixNano).toBeUndefined();
-    const output = JSON.parse((attrs['gen_ai.output.messages'] as any).stringValue);
+    const output = jsonAttr<OutputMessage[]>(attrs, 'gen_ai.output.messages');
     expect(output[0].tool_calls).toBeUndefined();
   });
 
@@ -113,7 +137,7 @@ describe('buildTracePayload', () => {
         { tool: 'lookup', toolInput: { id: 2 }, observation: 'obs-b' },
       ],
     });
-    const output = JSON.parse((attrsOf(body)['gen_ai.output.messages'] as any).stringValue);
+    const output = jsonAttr<OutputMessage[]>(attrsOf(body), 'gen_ai.output.messages');
     expect(output).toEqual([
       {
         role: 'assistant',
@@ -128,7 +152,7 @@ describe('buildTracePayload', () => {
 
   it('with zero tool calls the output is just the answer message', () => {
     const { body } = buildTracePayload({ ...base, output: 'Paris.', toolCalls: [] });
-    const output = JSON.parse((attrsOf(body)['gen_ai.output.messages'] as any).stringValue);
+    const output = jsonAttr<OutputMessage[]>(attrsOf(body), 'gen_ai.output.messages');
     expect(output).toEqual([{ role: 'assistant', content: 'Paris.' }]);
   });
 
@@ -138,7 +162,7 @@ describe('buildTracePayload', () => {
       output: 'done',
       toolCalls: [{ tool: 'search', toolInput: {}, observation: { text: 'from object' } }],
     });
-    const output = JSON.parse((attrsOf(body)['gen_ai.output.messages'] as any).stringValue);
+    const output = jsonAttr<OutputMessage[]>(attrsOf(body), 'gen_ai.output.messages');
     expect(output).toEqual([
       { role: 'assistant', tool_calls: [{ function: { name: 'search', arguments: '{}' } }] },
       { role: 'tool', content: 'from object' },
@@ -152,7 +176,7 @@ describe('buildTracePayload', () => {
       output: 'done',
       toolCalls: [{ tool: 'search', toolInput: {} }],
     });
-    const output = JSON.parse((attrsOf(body)['gen_ai.output.messages'] as any).stringValue);
+    const output = jsonAttr<OutputMessage[]>(attrsOf(body), 'gen_ai.output.messages');
     expect(output).toEqual([
       { role: 'assistant', tool_calls: [{ function: { name: 'search', arguments: '{}' } }] },
       { role: 'assistant', content: 'done' },

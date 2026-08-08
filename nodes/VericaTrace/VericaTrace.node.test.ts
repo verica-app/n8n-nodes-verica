@@ -101,7 +101,7 @@ describe('VericaTrace.execute', () => {
   it('emits reasoning and cached token attrs when the options are set', async () => {
     const { ctx, httpRequestWithAuthentication } = makeContext({
       ...params,
-      options: { ...(params.options as Params), reasoningTokens: 5, cachedTokens: 3 },
+      options: { ...(params.options as Params), reasoningUsage: 5, cachedUsage: 3 },
     });
     await new VericaTrace().execute.call(ctx as never);
 
@@ -117,7 +117,7 @@ describe('VericaTrace.execute', () => {
   it('preserves a cached-tokens value of 0 (a valid breakdown, not "missing")', async () => {
     const { ctx, httpRequestWithAuthentication } = makeContext({
       ...params,
-      options: { ...(params.options as Params), cachedTokens: 0 },
+      options: { ...(params.options as Params), cachedUsage: 0 },
     });
     await new VericaTrace().execute.call(ctx as never);
 

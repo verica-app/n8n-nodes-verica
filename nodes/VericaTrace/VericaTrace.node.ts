@@ -30,10 +30,13 @@ export class VericaTrace implements INodeType {
     subtitle: '={{ $parameter.model || "trace" }}',
     description: 'Sends the previous AI step to Verica as a monitored trace',
     defaults: { name: 'Verica Trace' },
-    // The type only allows opting in; omitting the property is the way to opt out,
-    // which the community-node lint flags. Exposing it as a tool is harmless: it
-    // still requires the credential and explicit parameters from the workflow author.
-    usableAsTool: true,
+    // Deliberately NOT usable as a tool: exporting a trace is a side effect of the
+    // workflow, not a capability an agent should invoke on itself. The type only
+    // allows opting IN (`true | UsableAsToolDescription | undefined`), while the
+    // community-node lint requires the property to be present — it checks only that
+    // the key exists, never its value. An explicit `undefined` satisfies both: n8n
+    // registers no `…Tool` variant. Do not "clean this up" into a bare omission.
+    usableAsTool: undefined,
     inputs: [NodeConnectionTypes.Main],
     outputs: [NodeConnectionTypes.Main],
     credentials: [{ name: 'vericaApi', required: true }],

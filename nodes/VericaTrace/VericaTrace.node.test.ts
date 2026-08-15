@@ -1,3 +1,4 @@
+import type { INodeProperties, INodePropertyOptions } from 'n8n-workflow';
 import { describe, expect, it, vi } from 'vitest';
 import { VericaTrace } from './VericaTrace.node';
 
@@ -27,6 +28,48 @@ const params: Params = {
   toolCalls: [{ action: { tool: 'search', toolInput: { q: 'x' } } }],
   options: { sessionId: 's1', tags: 'checkout, prod' },
 };
+
+// n8n's node UX is built on the Resource -> Operation -> Action triad: the
+// actions listed on the canvas come from `operation.options[].action`, and a
+// node without it is rejected in the manual review (0.2.2 was).
+describe('VericaTrace.description', () => {
+  const properties = new VericaTrace().description.properties;
+  const byName = (name: string) => properties.find((p) => p.name === name);
+
+  it('leads with the Resource and Operation selectors', () => {
+    expect(properties[0]?.name).toBe('resource');
+    expect(properties[1]?.name).toBe('operation');
+  });
+
+  it('marks both selectors as not expression-driven', () => {
+    for (const name of ['resource', 'operation']) {
+      const param = byName(name);
+      expect(param?.type).toBe('options');
+      expect(param?.noDataExpression).toBe(true);
+      expect(param?.default).toBeTruthy();
+    }
+  });
+
+  it('gives every operation an action, so it shows up in the actions list', () => {
+    const options = (byName('operation')?.options ?? []) as INodePropertyOptions[];
+    expect(options.length).toBeGreaterThan(0);
+    for (const option of options) {
+      expect(option.action, `operation "${option.value}" has no action`).toBeTruthy();
+      expect(option.description).toBeTruthy();
+      // Sentence case, no trailing period: `node-param-operation-option-action-miscased`.
+      expect(option.action).toMatch(/^[A-Z][^.]*[^.]$/);
+    }
+  });
+
+  it('gates every other field behind the resource and the operation', () => {
+    const gated = properties.filter((p) => !['resource', 'operation'].includes(p.name));
+    expect(gated.length).toBeGreaterThan(0);
+    for (const param of gated as INodeProperties[]) {
+      expect(param.displayOptions?.show?.resource, `${param.name} is not gated`).toEqual(['trace']);
+      expect(param.displayOptions?.show?.operation, `${param.name} is not gated`).toEqual(['send']);
+    }
+  });
+});
 
 describe('VericaTrace.execute', () => {
   it('POSTs the OTLP payload with the n8n source header and passes items through', async () => {
@@ -134,6 +177,17 @@ describe('VericaTrace.execute', () => {
     const result = await new VericaTrace().execute.call(ctx as never);
     expect(result[0]![0]!.json.vericaError).toBe('boom');
     expect(result[0]![0]!.json.output).toBe('Paris.');
+  });
+
+  it('fail-open: an unsupported operation annotates the items instead of exporting', async () => {
+    const { ctx, httpRequestWithAuthentication } = makeContext({
+      ...params,
+      operation: 'nope',
+    });
+    const result = await new VericaTrace().execute.call(ctx as never);
+    expect(result[0]![0]!.json.vericaError).toContain('nope');
+    expect(result[0]![0]!.json.output).toBe('Paris.');
+    expect(httpRequestWithAuthentication).not.toHaveBeenCalled();
   });
 
   it('fail-open: a credential-resolution error never throws, it annotates the items', async () => {

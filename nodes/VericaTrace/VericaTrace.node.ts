@@ -41,10 +41,41 @@ export class VericaTrace implements INodeType {
     outputs: [NodeConnectionTypes.Main],
     credentials: [{ name: 'vericaApi', required: true }],
     properties: [
+      // n8n's node UX is the Resource -> Operation -> Action triad, and it is not
+      // optional: the actions offered on the canvas are read from
+      // `operation.options[].action`. The ingest-scoped credential reaches exactly
+      // one endpoint (POST /v1/traces), so there is exactly one resource with one
+      // operation — padding either list with anything the credential cannot do
+      // would be a lie to the user, not better UX.
+      {
+        displayName: 'Resource',
+        name: 'resource',
+        type: 'options',
+        noDataExpression: true,
+        default: 'trace',
+        options: [{ name: 'Trace', value: 'trace' }],
+      },
+      {
+        displayName: 'Operation',
+        name: 'operation',
+        type: 'options',
+        noDataExpression: true,
+        default: 'send',
+        displayOptions: { show: { resource: ['trace'] } },
+        options: [
+          {
+            name: 'Send',
+            value: 'send',
+            description: 'Send the previous AI step to Verica as a monitored trace',
+            action: 'Send a trace',
+          },
+        ],
+      },
       {
         displayName: 'Model',
         name: 'model',
         type: 'string',
+        displayOptions: { show: { resource: ['trace'], operation: ['send'] } },
         default: '',
         placeholder: 'gpt-4o',
         description:
@@ -54,6 +85,7 @@ export class VericaTrace implements INodeType {
         displayName: 'Input',
         name: 'input',
         type: 'string',
+        displayOptions: { show: { resource: ['trace'], operation: ['send'] } },
         default: '={{ $json.chatInput || "" }}',
         description:
           "Defaults to the incoming item's chat input; for a chat workflow, point it at your trigger node instead. \"Message a model\" does not echo the prompt: read it from the node's parameters, e.g. {{ $('Message a model').params.responses.values[0].content }} (hover the Prompt field to confirm the path).",
@@ -62,6 +94,7 @@ export class VericaTrace implements INodeType {
         displayName: 'Output',
         name: 'output',
         type: 'string',
+        displayOptions: { show: { resource: ['trace'], operation: ['send'] } },
         default: '={{ $json.output || "" }}',
         description:
           'The model/agent answer. Object shapes (AI Agent output, "Message a model" responses) are flattened to text automatically.',
@@ -70,6 +103,7 @@ export class VericaTrace implements INodeType {
         displayName: 'Tool Calls',
         name: 'toolCalls',
         type: 'json',
+        displayOptions: { show: { resource: ['trace'], operation: ['send'] } },
         default: '={{ $json.intermediateSteps || $json.output || [] }}',
         description:
           'AI Agent intermediate steps (enable "Return intermediate steps" on the agent), else a raw output array containing tool/function calls; non-tool entries are ignored. Note: "Message a model" with attached tools runs its tool loop internally and returns only the final answer, so its executed calls are not capturable; use the AI Agent for tool-using workflows.',
@@ -79,6 +113,7 @@ export class VericaTrace implements INodeType {
         name: 'options',
         type: 'collection',
         placeholder: 'Add option',
+        displayOptions: { show: { resource: ['trace'], operation: ['send'] } },
         default: {},
         // Alphabetized by display name, as the community-node lint requires.
         // The token fields are COUNTS, not secrets, but the sensitive-parameter rule
@@ -157,6 +192,21 @@ export class VericaTrace implements INodeType {
 
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
     const items = this.getInputData();
+    // Both selectors are `noDataExpression`, so they cannot vary per item: read
+    // them once. Anything other than trace:send can only come from a workflow
+    // saved by a NEWER version of this node, so it fails open like everything
+    // else here — the host workflow keeps running, annotated.
+    const resource = String(this.getNodeParameter('resource', 0, 'trace'));
+    const operation = String(this.getNodeParameter('operation', 0, 'send'));
+    if (resource !== 'trace' || operation !== 'send') {
+      const message = `Unsupported operation "${resource}:${operation}". Update the Verica node.`;
+      return [
+        items.map((item, i) => ({
+          json: { ...item.json, vericaError: message },
+          pairedItem: { item: i },
+        })),
+      ];
+    }
     // Fail-open: credential/endpoint resolution must NEVER break the host
     // workflow either. On failure, annotate every item and pass them through.
     let endpoint: string;

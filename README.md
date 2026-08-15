@@ -15,7 +15,10 @@ tool calls, token usage and cost.
 1. Create a **Verica API** credential: an ingest token (Verica → Settings →
    API tokens, with the `ingest` scope). The endpoint defaults to the Verica
    cloud.
-2. Drop **Verica Trace** after your AI Agent (or any LLM step). The defaults
+2. Drop **Verica Trace** after your AI Agent (or any LLM step), or pick its
+   **Send a trace** action straight from the canvas. The node has one resource,
+   **Trace**, with one operation, **Send** — an ingest token reaches exactly one
+   endpoint. The defaults
    read `$json.output`, `$json.chatInput`, `$json.intermediateSteps` and
    `$json.sessionId`; set **Model** so the trace can be priced. It works after
    the AI Agent or "Message a model" out of the box: object outputs are

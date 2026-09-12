@@ -25,6 +25,12 @@ tool calls, token usage and cost.
    flattened to text automatically.
 3. Enable **Return intermediate steps** on the AI Agent so tool calls land in
    the trace (Verica's `tool_check` grader can then assert on them).
+4. Map **System Prompt** so the trace carries the instructions the agent ran
+   with (judges see it in `{{ input }}`, and "Promote to dataset" can copy it
+   into the dataset prompt). n8n does not emit the agent's system message
+   downstream: read it from the agent's parameter, e.g.
+   `{{ $('AI Agent').params.options.systemMessage }}` (use your agent node's
+   name). Empty = only the user message is sent.
 
 **Sessions.** Executions sharing a `sessionId` (the Chat Trigger provides one)
 reassemble into a Verica session, one turn per execution. Turns are stored as

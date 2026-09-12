@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-verica",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "LLM observability for your AI Agent and LLM steps: send each execution to Verica as a trace with tool calls, tokens and cost.",
   "license": "MIT",
   "author": {

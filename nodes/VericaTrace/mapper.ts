@@ -12,6 +12,8 @@ export interface ToolCallInput {
 }
 
 export interface TraceFields {
+  /** Blank = no system message (n8n does not emit the agent's system message downstream). */
+  systemPrompt: string;
   input: string;
   output: string;
   toolCalls: ToolCallInput[];
@@ -150,8 +152,14 @@ export function buildTracePayload(f: TraceFields): { traceId: string; body: unkn
     .slice(0, MAX_TAGS)
     .map((t) => (t.length <= MAX_TAG_LEN ? t : t.slice(0, MAX_TAG_LEN)));
 
+  const systemPrompt = f.systemPrompt.trim();
+  const inputMessages: Record<string, unknown>[] = [
+    ...(systemPrompt.length > 0 ? [{ role: 'system', content: systemPrompt }] : []),
+    { role: 'user', content: f.input },
+  ];
+
   const attributes: OtlpAttr[] = [
-    s('gen_ai.input.messages', JSON.stringify([{ role: 'user', content: f.input }])),
+    s('gen_ai.input.messages', JSON.stringify(inputMessages)),
     s('gen_ai.output.messages', JSON.stringify(outputMessages)),
     s('verica.tags', JSON.stringify(tags)),
   ];

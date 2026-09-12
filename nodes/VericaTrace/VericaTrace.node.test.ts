@@ -61,6 +61,17 @@ describe('VericaTrace.description', () => {
     }
   });
 
+  it('exposes System Prompt as a top-level field between Model and Input, optional', () => {
+    const names = properties.map((p) => p.name);
+    expect(names.indexOf('systemPrompt')).toBe(names.indexOf('model') + 1);
+    expect(names.indexOf('input')).toBe(names.indexOf('systemPrompt') + 1);
+    const param = byName('systemPrompt');
+    expect(param?.type).toBe('string');
+    expect(param?.default).toBe('');
+    expect(param?.required).toBeFalsy();
+    expect(param?.placeholder).toContain("$('AI Agent').params.options.systemMessage");
+  });
+
   it('gates every other field behind the resource and the operation', () => {
     const gated = properties.filter((p) => !['resource', 'operation'].includes(p.name));
     expect(gated.length).toBeGreaterThan(0);
@@ -89,6 +100,38 @@ describe('VericaTrace.execute', () => {
 
     expect(result[0]![0]!.json.output).toBe('Paris.'); // passthrough
     expect(result[0]![0]!.json.vericaTraceId).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  it('sends the system prompt as a leading system message when mapped', async () => {
+    const { ctx, httpRequestWithAuthentication } = makeContext({
+      ...params,
+      systemPrompt: 'Answer in French.',
+    });
+    await new VericaTrace().execute.call(ctx as never);
+
+    const [, req] = httpRequestWithAuthentication.mock.calls[0]!;
+    const span = req.body.resourceSpans[0].scopeSpans[0].spans[0];
+    const attrs = Object.fromEntries(
+      span.attributes.map((a: { key: string; value: unknown }) => [a.key, a.value]),
+    );
+    const input = JSON.parse(attrs['gen_ai.input.messages'].stringValue);
+    expect(input).toEqual([
+      { role: 'system', content: 'Answer in French.' },
+      { role: 'user', content: 'capital?' },
+    ]);
+  });
+
+  it('sends only the user message when the system prompt is left empty', async () => {
+    const { ctx, httpRequestWithAuthentication } = makeContext(params);
+    await new VericaTrace().execute.call(ctx as never);
+
+    const [, req] = httpRequestWithAuthentication.mock.calls[0]!;
+    const span = req.body.resourceSpans[0].scopeSpans[0].spans[0];
+    const attrs = Object.fromEntries(
+      span.attributes.map((a: { key: string; value: unknown }) => [a.key, a.value]),
+    );
+    const input = JSON.parse(attrs['gen_ai.input.messages'].stringValue);
+    expect(input).toEqual([{ role: 'user', content: 'capital?' }]);
   });
 
   it("coerces the OpenAI 'Message a model' output array to text, not [object Object]", async () => {

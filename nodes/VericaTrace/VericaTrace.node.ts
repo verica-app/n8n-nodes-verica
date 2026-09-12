@@ -82,6 +82,16 @@ export class VericaTrace implements INodeType {
           "The model the upstream AI step used, needed to price the trace. The incoming item already carries it after \"Message a model\"; with an AI Agent, read the chat-model sub-node's parameter, e.g. {{ $('OpenAI Chat Model').params.model.value || $('OpenAI Chat Model').params.model }}.",
       },
       {
+        displayName: 'System Prompt',
+        name: 'systemPrompt',
+        type: 'string',
+        displayOptions: { show: { resource: ['trace'], operation: ['send'] } },
+        default: '',
+        placeholder: "{{ $('AI Agent').params.options.systemMessage }}",
+        description:
+          "The system message the upstream AI step ran with, sent as the trace's leading system message so judges see it and \"Promote to dataset\" can copy it into the dataset prompt. n8n does not emit it downstream: read it from the agent's parameter, e.g. {{ $('AI Agent').params.options.systemMessage }} (use your agent node's name). Leave empty to send only the user message.",
+      },
+      {
         displayName: 'Input',
         name: 'input',
         type: 'string',
@@ -236,6 +246,7 @@ export class VericaTrace implements INodeType {
             ? inferProvider(model)
             : String(options.provider);
         const payload = buildTracePayload({
+          systemPrompt: coerceText(this.getNodeParameter('systemPrompt', i, '')),
           input: coerceText(this.getNodeParameter('input', i, '')),
           output: coerceText(this.getNodeParameter('output', i, '')),
           toolCalls: normalizeIntermediateSteps(this.getNodeParameter('toolCalls', i, [])),

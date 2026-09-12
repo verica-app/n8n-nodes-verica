@@ -11,6 +11,7 @@ import {
 const fixedHex = (bytes: number) => 'ab'.repeat(bytes);
 
 const base: TraceFields = {
+  systemPrompt: '',
   input: 'What is the capital of France?',
   output: 'Paris.',
   toolCalls: [{ tool: 'search', toolInput: { query: 'capital of France' } }],
@@ -121,6 +122,21 @@ describe('buildTracePayload', () => {
     expect(span.endTimeUnixNano).toBeUndefined();
     const output = jsonAttr<OutputMessage[]>(attrs, 'gen_ai.output.messages');
     expect(output[0].tool_calls).toBeUndefined();
+  });
+
+  it('prepends a system message when a system prompt is given', () => {
+    const { body } = buildTracePayload({ ...base, systemPrompt: 'Answer in French.' });
+    const input = jsonAttr<OutputMessage[]>(attrsOf(body), 'gen_ai.input.messages');
+    expect(input).toEqual([
+      { role: 'system', content: 'Answer in French.' },
+      { role: 'user', content: 'What is the capital of France?' },
+    ]);
+  });
+
+  it('emits no system message when the system prompt is blank', () => {
+    const { body } = buildTracePayload({ ...base, systemPrompt: '   ' });
+    const input = jsonAttr<OutputMessage[]>(attrsOf(body), 'gen_ai.input.messages');
+    expect(input).toEqual([{ role: 'user', content: 'What is the capital of France?' }]);
   });
 
   it('an explicit provider wins over inference', () => {
